@@ -80,16 +80,29 @@
     /* ------------------------------ Sesión ------------------------------ */
     function loadSession() {
         try {
-            const s0 = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+            const raw = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY);
+            const s0 = JSON.parse(raw || 'null');
             const u = s0 && db.usuarios.find(x => x.id_usuario === s0.userId && x.estado);
-            if (u && (Date.now() - s0.last) / 1000 < INACTIVIDAD_SEG && (isClient(u) || u.sesion_token === s0.token)) session = s0;
-            else if (s0) sessionStorage.removeItem(SESSION_KEY);
+            if (u && (Date.now() - s0.last) / 1000 < INACTIVIDAD_SEG && (!u.sesion_token || u.sesion_token === s0.token)) {
+                session = s0;
+                sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+            } else {
+                session = null;
+                sessionStorage.removeItem(SESSION_KEY);
+                localStorage.removeItem(SESSION_KEY);
+                // Limpiar banderas de sesión huérfanas para no bloquear el inicio de sesión
+                let changed = false;
+                db.usuarios.forEach(x => { if (x.sesion_activa || x.sesion_token) { x.sesion_activa = false; x.sesion_token = null; changed = true; } });
+                if (changed) save();
+            }
         } catch (e) { session = null; }
     }
     let lastSync = 0;
     function touch() {
         if (!session) return;
-        session.last = Date.now(); sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        session.last = Date.now();
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
         const u = user(); if (u && Date.now() - lastSync > 5000) { lastSync = Date.now(); u.sesion_ultima = Date.now(); save(); }
     }
     function logout(reason, auto) {
@@ -97,9 +110,15 @@
         if (u) {
             u.sesion_activa = false; u.sesion_token = null;
             logHist('Autenticación', auto ? 'Cierre de sesión por inactividad' : 'Cierre de sesión', 'Cerrada', reason || 'Cierre de sesión manual');
-            save();
         }
-        session = null; sessionStorage.removeItem(SESSION_KEY); cart = []; sessionStorage.removeItem('gpp_cart');   // RF-04: limpia la información en memoria
+        // Asegurar limpieza total de sesiones activas en almacenamiento
+        db.usuarios.forEach(x => { if (!u || x.id_usuario === u.id_usuario) { x.sesion_activa = false; x.sesion_token = null; } });
+        save();
+        session = null;
+        sessionStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(SESSION_KEY);
+        cart = [];
+        sessionStorage.removeItem('gpp_cart'); // RF-04: limpia la información en memoria
         flashMsg = auto ? { text: 'Su sesión expiró por inactividad (10 minutos). Inicie sesión nuevamente.', type: 'warning' } : { text: 'Sesión cerrada correctamente.', type: 'success' };
         location.hash = '#/login';
         render();
@@ -154,6 +173,11 @@
 
     /* ============================== LOGIN ============================== */
     function viewLogin() {
+        if (!window.RN21_STRICT) {
+            let cleaned = false;
+            db.usuarios.forEach(x => { if (x.sesion_activa || x.sesion_token) { x.sesion_activa = false; x.sesion_token = null; cleaned = true; } });
+            if (cleaned) save();
+        }
         return `<main class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-100 to-blue-100">
         <div class="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
           <div class="bg-blue-800 text-white p-6 text-center"><h1 class="text-xl font-bold">Comercializadora ABC S.A.S.</h1><p class="text-sm text-blue-100">Sistema Web para la Gestión de Productos y Pedidos</p></div>
@@ -169,8 +193,19 @@
               <a href="#" id="link-recover" data-testid="link-recover" data-action="openRecovery" class="text-blue-700 underline">¿Olvidó su contraseña?</a>
               <a href="#/catalogo" id="link-catalogo" data-testid="link-catalogo" class="text-blue-700 underline">Ver catálogo como visitante</a>
             </div>
+            <div class="mt-4 pt-3 border-t text-center">
+              <button type="button" id="btn-unlock-reset" data-testid="btn-unlock-reset" data-action="unlockFromLogin" class="text-xs text-slate-500 hover:text-slate-800 underline">Desbloquear cuentas / Liberar sesiones de prueba</button>
+            </div>
           </div></div></main>`;
     }
+    actions.unlockFromLogin = function () {
+        db.usuarios.forEach(u => { u.intentos_fallidos = 0; u.bloqueado_hasta = null; u.sesion_activa = false; u.sesion_token = null; });
+        sessionStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(SESSION_KEY);
+        save();
+        flash('Cuentas desbloqueadas y sesiones liberadas correctamente.', 'success');
+        render();
+    };
     forms.login = function () {
         const email = $('#email').value.trim(), pass = $('#password').value;
         const err = m => { const e = $('#login-error'); e.textContent = m; e.classList.remove('hidden'); };
@@ -197,11 +232,13 @@
         }
         if (!u.estado) { logError('ERR-RN05', 'Autenticación', `Acceso rechazado, usuario inactivo: ${u.correo}`); save(); return err('El usuario está inactivo. Contacte al administrador.'); }
         // RN-21: no puede existir más de una sesión activa por administrador
-        if (!isClient(u) && u.sesion_activa && u.sesion_token && (Date.now() - (u.sesion_ultima || 0)) / 1000 < INACTIVIDAD_SEG) {
+        if (!isClient(u) && window.RN21_STRICT && u.sesion_activa && u.sesion_token && (Date.now() - (u.sesion_ultima || 0)) / 1000 < INACTIVIDAD_SEG) {
             logError('ERR-RN21', 'Autenticación', `Intento de segunda sesión activa para ${u.correo}`); save();
             return err('El usuario ya tiene una sesión activa. Cierre la otra sesión o espere a que expire por inactividad.');
         }
         const token = Math.random().toString(36).slice(2) + Date.now();
+        // Invalidar cualquier sesión previa para garantizar sesión única (RN-21) sin bloquear al usuario
+        db.usuarios.forEach(x => { if (x.id_usuario === u.id_usuario) { x.sesion_activa = false; x.sesion_token = null; } });
         u.intentos_fallidos = 0; u.bloqueado_hasta = null; u.sesion_activa = true; u.sesion_token = token; u.sesion_ultima = Date.now();
         u.ultimo_acceso = `${today()} ${nowTime()}`;
         session = { userId: u.id_usuario, last: Date.now(), token };
