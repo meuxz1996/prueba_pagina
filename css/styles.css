@@ -1,0 +1,85 @@
+/* ============================================================================
+ * ESTILOS PERSONALIZADOS Y ACCESIBILIDAD WCAG 2.1 AA (RNF-15, RNF-12)
+ * Sistema Web para la Gestión de Productos y Pedidos (SW-GPP-001)
+ * ============================================================================ */
+
+:root {
+    --brand-primary: #1e40af;
+    --brand-secondary: #0f172a;
+    --brand-accent: #0284c7;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+}
+
+/* Accesibilidad WCAG 2.1 AA (RNF-15): Indicadores de foco claros */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid #2563eb !important;
+    outline-offset: 2px !important;
+}
+
+/* Animaciones suaves para modales y vistas */
+.fade-in {
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Scrollbar limpio */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Tarjetas de productos con proporción consistente */
+.product-card-img {
+    height: 170px;
+    width: 100%;
+    object-fit: cover;
+}
+
+/* Estilos de impresión para Reportes (RF-22 a RF-25) */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    body {
+        background: #ffffff !important;
+    }
+    .print-container {
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+    }
+}

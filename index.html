@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SW-GPP-001 | Gestión de Productos y Pedidos - Comercializadora ABC S.A.S.</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+    <!-- Contenedor único de la aplicación (se renderiza según la ruta #/...) -->
+    <div id="app" data-testid="app"></div>
+
+    <!-- Modal genérico -->
+    <div id="modal" data-testid="modal" class="fixed inset-0 bg-slate-900/60 z-50 hidden items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between px-5 py-3 border-b">
+                <h2 id="modal-title" class="font-bold text-lg"></h2>
+                <button type="button" id="modal-close" data-action="closeModal" class="text-2xl leading-none px-2" aria-label="Cerrar">&times;</button>
+            </div>
+            <div id="modal-body" class="p-5 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
